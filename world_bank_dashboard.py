@@ -1,5 +1,4 @@
 # /// script
-# requires-python = ">=3.13"
 # dependencies = [
 #     "altair==6.3.0",
 #     "marimo>=0.25.2",
@@ -35,11 +34,6 @@ def _(pd):
 
     df_raw = pd.read_csv(url)
     return (df_raw,)
-
-
-@app.cell
-def _():
-    return
 
 
 @app.cell
@@ -126,7 +120,7 @@ def _(mo, orange, purple):
     header = mo.md(
         f"""
     # Group 4 · “Growing internet use brings birth rates down.”
-    **Members:** Rosemary Marion Ndyemanya · Eshal Subaida Nazar · Niels
+    **Members:** Rosemary Marion Ndyemanya · Eshal Subaida Nazar · Niels Löckmann
 
     - **Why this claim:** Falling birth rates are often blamed on screens. New studies from 2026 link smartphones to fewer births, while older studies find effects in both directions.
     - **Why these indicators:** The birth rate is what the claim is about, internet use is the claimed cause. GDP per capita, rural population and life expectancy show whether wealth, cities or simply time move just as closely with births.
@@ -186,29 +180,42 @@ def _(
     x_title,
     y_title,
 ):
+    _country_click = alt.selection_point(fields=["country"], bind="legend")
     _log = selected_indicator == "gdp_per_capita" and not changes.value
-    _base = alt.Chart(filtered_df).encode(
-        x=alt.X(
-            f"{selected_indicator}:Q",
-            title=x_title,
-            scale=alt.Scale(type="log") if _log else alt.Scale(zero=False),
-            axis=gdp_axis if _log else alt.Axis(),
-        ),
-        y=alt.Y("birth_rate:Q", title=y_title, scale=alt.Scale(zero=False)),
-        color=alt.Color("country:N", scale=country_colors, title="Country"),
+    _base = (
+        alt.Chart(filtered_df)
+        .add_params(_country_click)
+        .encode(
+            x=alt.X(
+                f"{selected_indicator}:Q",
+                title=x_title,
+                scale=alt.Scale(type="log") if _log else alt.Scale(zero=False),
+                axis=gdp_axis if _log else alt.Axis(),
+            ),
+            y=alt.Y("birth_rate:Q", title=y_title, scale=alt.Scale(zero=False)),
+            color=alt.Color("country:N", scale=country_colors, title="Country"),
+        )
     )
-    _points = _base.mark_circle(size=60, opacity=0.85).encode(
-        tooltip=[
-            alt.Tooltip("country:N", title="Country"),
-            alt.Tooltip("year:Q", title="Year"),
-            alt.Tooltip(f"{selected_indicator}:Q", title=x_title, format=",.1f"),
-            alt.Tooltip("birth_rate:Q", title=y_title, format=".1f"),
-        ]
+    _points = (
+        _base.mark_circle(size=60, opacity=0.85)
+        .transform_filter(_country_click)
+        .encode(
+            tooltip=[
+                alt.Tooltip("country:N", title="Country"),
+                alt.Tooltip("year:Q", title="Year"),
+                alt.Tooltip(f"{selected_indicator}:Q", title=x_title, format=",.1f"),
+                alt.Tooltip("birth_rate:Q", title=y_title, format=".1f"),
+            ]
+        )
     )
     # trend per country
-    _trend = _base.transform_regression(
-        selected_indicator, "birth_rate", groupby=["country"], method="log" if _log else "linear"
-    ).mark_line(strokeWidth=2)
+    _trend = (
+        _base.transform_filter(_country_click)
+        .transform_regression(
+            selected_indicator, "birth_rate", groupby=["country"], method="log" if _log else "linear"
+        )
+        .mark_line(strokeWidth=2)
+    )
 
     scatter = (_points + _trend).properties(width=440, height=330)
     return (scatter,)
@@ -279,10 +286,14 @@ def _(
     x_title,
     y_title,
 ):
+    _country_click = alt.selection_point(fields=["country"], bind="legend")
+
     def _histogram(column, title):
         return (
             alt.Chart(filtered_df)
+            .add_params(_country_click)
             .mark_bar()
+            .transform_filter(_country_click)
             .encode(
                 x=alt.X(f"{column}:Q", bin=alt.Bin(maxbins=20), title=title),
                 y=alt.Y("count()", title="Country-years"),
